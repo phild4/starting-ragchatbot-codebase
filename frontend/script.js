@@ -28,8 +28,10 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
-    
+
+    // New chat button
+    document.getElementById('newChatButton').addEventListener('click', createNewSession);
+
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -122,10 +124,31 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        const sourceItems = sources.map(s => {
+            // Handle both object format {title, lesson_number, url} and legacy string format
+            if (typeof s === 'string') {
+                return `<li class="source-item"><span class="source-text">${escapeHtml(s)}</span></li>`;
+            }
+            const title = s.title || 'Unknown';
+            const lessonText = s.lesson_number ? `Lesson ${s.lesson_number}` : '';
+            if (s.url) {
+                return `<li class="source-item">
+                    <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" class="source-link">
+                        <span class="source-title">${escapeHtml(title)}</span>
+                        ${lessonText ? `<span class="source-lesson">${lessonText}</span>` : ''}
+                    </a>
+                </li>`;
+            }
+            return `<li class="source-item">
+                <span class="source-text">${escapeHtml(title)}</span>
+                ${lessonText ? `<span class="source-lesson">${lessonText}</span>` : ''}
+            </li>`;
+        }).join('');
+
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <ul class="sources-list">${sourceItems}</ul>
             </details>
         `;
     }

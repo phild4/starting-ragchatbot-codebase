@@ -5,7 +5,7 @@ from vector_store import VectorStore
 from ai_generator import AIGenerator
 from session_manager import SessionManager
 from search_tools import ToolManager, CourseSearchTool
-from models import Course, Lesson, CourseChunk
+from models import Course, Lesson, CourseChunk, Source
 
 class RAGSystem:
     """Main orchestrator for the Retrieval-Augmented Generation system"""
@@ -99,25 +99,25 @@ class RAGSystem:
         
         return total_courses, total_chunks
     
-    def query(self, query: str, session_id: Optional[str] = None) -> Tuple[str, List[str]]:
+    def query(self, query: str, session_id: Optional[str] = None) -> Tuple[str, List[Source]]:
         """
         Process a user query using the RAG system with tool-based search.
-        
+
         Args:
             query: User's question
             session_id: Optional session ID for conversation context
-            
+
         Returns:
-            Tuple of (response, sources list - empty for tool-based approach)
+            Tuple of (response, sources list with lesson links)
         """
         # Create prompt for the AI with clear instructions
         prompt = f"""Answer this question about course materials: {query}"""
-        
+
         # Get conversation history if session exists
         history = None
         if session_id:
             history = self.session_manager.get_conversation_history(session_id)
-        
+
         # Generate response using AI with tools
         response = self.ai_generator.generate_response(
             query=prompt,
@@ -125,19 +125,61 @@ class RAGSystem:
             tools=self.tool_manager.get_tool_definitions(),
             tool_manager=self.tool_manager
         )
-        
-        # Get sources from the search tool
-        sources = self.tool_manager.get_last_sources()
+
+        # Get sources from the search tool (now structured data)
+        raw_sources = self.tool_manager.get_last_sources()
+
+        # Enrich sources with lesson links from vector store
+        sources = self._enrich_sources_with_links(raw_sources)
 
         # Reset sources after retrieving them
         self.tool_manager.reset_sources()
-        
+
         # Update conversation history
         if session_id:
             self.session_manager.add_exchange(session_id, query, response)
-        
-        # Return response with sources from tool searches
+
+        # Return response with enriched sources
         return response, sources
+
+    def _enrich_sources_with_links(self, raw_sources: List[Dict]) -> List[Source]:
+        """
+        Enrich source metadata with lesson links from the vector store.
+
+        Args:
+            raw_sources: List of dicts with 'title' and 'lesson_number'
+
+        Returns:
+            List of Source objects with URLs populated
+        """
+        enriched = []
+        seen = set()  # Track unique sources to avoid duplicates
+
+        for src in raw_sources:
+            title = src.get('title', 'unknown')
+            lesson_num = src.get('lesson_number')
+
+            # Create unique key to deduplicate
+            key = (title, lesson_num)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Look up the lesson link from vector store
+            url = None
+            if lesson_num is not None:
+                url = self.vector_store.get_lesson_link(title, lesson_num)
+            if url is None:
+                # Fall back to course link if no lesson link
+                url = self.vector_store.get_course_link(title)
+
+            enriched.append(Source(
+                title=title,
+                lesson_number=lesson_num,
+                url=url
+            ))
+
+        return enriched
     
     def get_course_analytics(self) -> Dict:
         """Get analytics about the course catalog"""

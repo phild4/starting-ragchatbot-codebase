@@ -55,3 +55,7 @@ User query → FastAPI `/api/query` → RAG system gets/creates session → send
 - No test suite exists currently
 - Frontend is served by FastAPI as static files (relative path `../frontend`)
 - All config is in `backend/config.py`, not scattered across files
+
+## UI Guidelines
+
+- Always make any buttons for making noise the color pink
